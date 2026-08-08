@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f5c84c" />
+
+  <title>Slang Word Cloud</title>
+
+  <!-- Word cloud library -->
+  <script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.3/src/wordcloud2.min.js"></script>
+
+  <style>
+    :root {
+      --yellow: #f5c84c;
+      --yellow-soft: #fff7d8;
+      --black: #171717;
+      --white: #ffffff;
+      --cream: #fbfaf5;
+      --gray: #727272;
+      --line: #e5e1d7;
+      --green: #27844c;
+      --red: #b42318;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--black);
+      background:
+        radial-gradient(circle at 10% 0%, rgba(245, 200, 76, 0.28), transparent 28rem),
+        var(--cream);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+    }
+
+    .page {
+      width: min(1100px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 42px 0 54px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,.78);
+      font-size: .76rem;
+      font-weight: 800;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+
+    .tag-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--yellow);
+    }
+
+    h1 {
+      max-width: 920px;
+      margin: 18px 0 0;
+      font-size: clamp(2.45rem, 7vw, 5.25rem);
+      line-height: .98;
+      letter-spacing: -.06em;
+    }
+
+    .intro {
+      max-width: 720px;
+      margin: 17px 0 0;
+      color: var(--gray);
+      font-size: 1rem;
+      line-height: 1.6;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 340px minmax(0, 1fr);
+      gap: 20px;
+      margin-top: 32px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(255,255,255,.95);
+      box-shadow: 0 16px 44px rgba(0,0,0,.055);
+    }
+
+    .entry-card {
+      padding: 22px;
+      height: fit-content;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: -.025em;
+    }
+
+    label {
+      display: block;
+      margin-top: 20px;
+      margin-bottom: 8px;
+      font-size: .88rem;
+      font-weight: 750;
+    }
+
+    .input-wrap {
+      position: relative;
+    }
+
+    input {
+      width: 100%;
+      padding: 15px 50px 15px 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--white);
+      color: var(--black);
+      font: inherit;
+      outline: none;
+      transition: .15s ease;
+    }
+
+    input:focus {
+      border-color: #c49c21;
+      box-shadow: 0 0 0 4px rgba(245, 200, 76, .22);
+    }
+
+    .counter {
+      position: absolute;
+      right: 13px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--gray);
+      font-size: .74rem;
+      pointer-events: none;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 11px;
+      padding: 14px 16px;
+      border: 0;
+      border-radius: 14px;
+      background: var(--black);
+      color: white;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform .12s ease, opacity .12s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .hint {
+      margin: 10px 2px 0;
+      color: var(--gray);
+      font-size: .78rem;
+      line-height: 1.45;
+    }
+
+    .status {
+      min-height: 23px;
+      margin-top: 13px;
+      font-size: .84rem;
+      font-weight: 750;
+    }
+
+    .status.ok {
+      color: var(--green);
+    }
+
+    .status.bad {
+      color: var(--red);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .stat {
+      padding: 13px;
+      border: 1px solid #ece9df;
+      border-radius: 14px;
+      background: #f8f7f2;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 1.4rem;
+      letter-spacing: -.04em;
+    }
+
+    .stat span {
+      display: block;
+      margin-top: 2px;
+      color: var(--gray);
+      font-size: .72rem;
+    }
+
+    .cloud-card {
+      min-height: 520px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .cloud-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      padding: 2px 4px 13px;
+    }
+
+    .live {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--gray);
+      font-size: .75rem;
+      white-space: nowrap;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #35a558;
+      box-shadow: 0 0 0 5px rgba(53,165,88,.10);
+    }
+
+    #cloud {
+      position: relative;
+      width: 100%;
+      min-height: 440px;
+      flex: 1;
+      border-radius: 17px;
+      overflow: hidden;
+      background:
+        linear-gradient(rgba(255,255,255,.75), rgba(255,255,255,.75)),
+        repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 31px,
+          rgba(0,0,0,.025) 32px
+        );
+    }
+
+    .empty {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      text-align: center;
+      color: var(--gray);
+      line-height: 1.55;
+    }
+
+    .connection-warning {
+      display: none;
+      margin-top: 14px;
+      padding: 12px;
+      border: 1px solid #ebcf72;
+      border-radius: 12px;
+      background: var(--yellow-soft);
+      font-size: .78rem;
+      line-height: 1.45;
+    }
+
+    footer {
+      margin-top: 18px;
+      color: var(--gray);
+      text-align: center;
+      font-size: .72rem;
+    }
+
+    @media (max-width: 780px) {
+      .page {
+        padding-top: 26px;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .cloud-card {
+        min-height: 440px;
+      }
+
+      #cloud {
+        min-height: 360px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="page">
+    <div class="tag">
+      <span class="tag-dot"></span>
+      Live word cloud
+    </div>
+
+    <h1>What slang is in your daily vocabulary?</h1>
+
+    <p class="intro">
+      Add a slang word or short phrase you actually use. Submit as many responses
+      as you want. If multiple people submit the same answer, it grows larger in
+      the word cloud.
+    </p>
+
+    <section class="layout">
+
+      <div class="card entry-card">
+        <h2>Add your response</h2>
+
+        <form id="responseForm">
+          <label for="responseInput">Slang word or phrase</label>
+
+          <div class="input-wrap">
+            <input
+              id="responseInput"
+              name="response"
+              type="text"
+              maxlength="40"
+              placeholder="ex. bet, cooked, no cap..."
+              autocomplete="off"
+              required
+            />
+
+            <span class="counter">
+              <span id="charCount">0</span>/40
+            </span>
+          </div>
+
+          <button id="submitButton" type="submit">
+            Submit response
+          </button>
+        </form>
+
+        <div id="status" class="status" aria-live="polite"></div>
+
+        <p class="hint">
+          You can submit more than once.
+        </p>
+
+        <div id="connectionWarning" class="connection-warning">
+          This page still needs the Apps Script web app URL added in the code.
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <strong id="totalResponses">0</strong>
+            <span>total responses</span>
+          </div>
+
+          <div class="stat">
+            <strong id="uniqueResponses">0</strong>
+            <span>unique responses</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card cloud-card">
+        <div class="cloud-head">
+          <h2>Live responses</h2>
+
+          <div class="live">
+            <span class="live-dot"></span>
+            Refreshes automatically
+          </div>
+        </div>
+
+        <div id="cloud">
+          <div class="empty">Be the first to add a response.</div>
+        </div>
+      </div>
+
+    </section>
+
+    <footer>
+      Responses are stored in the connected Google Sheet.
+    </footer>
+  </main>
+
+  <script>
+    /* ==========================================================
+       PASTE YOUR APPS SCRIPT /exec URL BETWEEN THE QUOTES BELOW.
+       This is the ONLY setting you need to change.
+       ========================================================== */
+
+    const APPS_SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE";
+
+
+    /* How often the word cloud checks the Google Sheet */
+    const REFRESH_EVERY_MS = 5000;
+
+
+    const form = document.getElementById("responseForm");
+    const input = document.getElementById("responseInput");
+    const button = document.getElementById("submitButton");
+    const statusEl = document.getElementById("status");
+    const charCount = document.getElementById("charCount");
+
+    const totalEl = document.getElementById("totalResponses");
+    const uniqueEl = document.getElementById("uniqueResponses");
+    const cloudEl = document.getElementById("cloud");
+    const connectionWarning = document.getElementById("connectionWarning");
+
+    let latestWords = [];
+
+    const notConnected =
+      !APPS_SCRIPT_URL ||
+      APPS_SCRIPT_URL.includes("PASTE_YOUR");
+
+
+    if (notConnected) {
+      button.disabled = true;
+      connectionWarning.style.display = "block";
+    }
+
+
+    input.addEventListener("input", () => {
+      charCount.textContent = input.value.length;
+    });
+
+
+    function setStatus(message, type = "") {
+      statusEl.textContent = message;
+      statusEl.className = "status " + type;
+    }
+
+
+    function cleanInput(value) {
+      return String(value)
+        .trim()
+        .replace(/\s+/g, " ")
+        .slice(0, 40);
+    }
+
+
+    /* ==========================================================
+       SUBMIT RESPONSE
+       ========================================================== */
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      if (notConnected) return;
+
+      const response = cleanInput(input.value);
+
+      if (!response) {
+        setStatus("Enter a response first.", "bad");
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = "Submitting...";
+
+      try {
+        /*
+          mode: "no-cors" is intentional.
+          Apps Script accepts the submission even though GitHub Pages
+          cannot directly inspect the POST response because it is cross-origin.
+        */
+
+        const body = new URLSearchParams();
+        body.append("response", response);
+
+        await fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          body
+        });
+
+        input.value = "";
+        charCount.textContent = "0";
+
+        setStatus("Added! You can submit another.", "ok");
+
+        /*
+          Give the Sheet a moment to save, then refresh the cloud.
+        */
+        setTimeout(loadWordCloudData, 900);
+
+        input.focus();
+
+      } catch (error) {
+        console.error(error);
+
+        setStatus(
+          "Could not submit right now. Try again.",
+          "bad"
+        );
+
+      } finally {
+        button.disabled = false;
+        button.textContent = "Submit response";
+      }
+    });
+
+
+    /* ==========================================================
+       GET RESPONSES USING JSONP
+       ========================================================== */
+
+    function loadWordCloudData() {
+      if (notConnected) return;
+
+      const callbackName =
+        "__wordCloudCallback_" +
+        Date.now() +
+        "_" +
+        Math.floor(Math.random() * 100000);
+
+      const script = document.createElement("script");
+
+      const cleanup = () => {
+        try {
+          delete window[callbackName];
+        } catch (_) {}
+
+        script.remove();
+      };
+
+
+      window[callbackName] = function(data) {
+        cleanup();
+
+        if (!data || !data.success) {
+          console.error("Invalid word cloud response:", data);
+          return;
+        }
+
+        totalEl.textContent = data.totalResponses || 0;
+        uniqueEl.textContent = data.uniqueResponses || 0;
+
+        latestWords = Array.isArray(data.words)
+          ? data.words
+          : [];
+
+        renderCloud();
+      };
+
+
+      script.onerror = function() {
+        cleanup();
+        console.error("Could not retrieve responses.");
+      };
+
+
+      script.src =
+        APPS_SCRIPT_URL +
+        "?callback=" +
+        encodeURIComponent(callbackName) +
+        "&_=" +
+        Date.now();
+
+      document.body.appendChild(script);
+    }
+
+
+    /* ==========================================================
+       DRAW WORD CLOUD
+       ========================================================== */
+
+    function renderCloud() {
+      cloudEl.innerHTML = "";
+
+      if (!latestWords.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "Be the first to add a response.";
+        cloudEl.appendChild(empty);
+        return;
+      }
+
+      const highest = Math.max(
+        ...latestWords.map(item => Number(item.count) || 1)
+      );
+
+      const list = latestWords.map(item => [
+        item.text,
+        Number(item.count) || 1
+      ]);
+
+
+      WordCloud(cloudEl, {
+        list,
+
+        gridSize: Math.max(
+          8,
+          Math.round(15 * window.devicePixelRatio)
+        ),
+
+        weightFactor: function(weight) {
+          const ratio = weight / highest;
+
+          /*
+            Even answers submitted once stay readable.
+            Repeated answers become progressively larger.
+          */
+          return 20 + ratio * 54;
+        },
+
+        fontFamily:
+          "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+
+        fontWeight: 750,
+
+        color: function() {
+          const colors = [
+            "#171717",
+            "#4d4530",
+            "#735a09",
+            "#9b7410",
+            "#c09614",
+            "#5e5e5e"
+          ];
+
+          return colors[
+            Math.floor(Math.random() * colors.length)
+          ];
+        },
+
+        backgroundColor: "transparent",
+
+        rotateRatio: 0.08,
+
+        minRotation: -Math.PI / 24,
+        maxRotation: Math.PI / 24,
+
+        shuffle: true,
+
+        drawOutOfBound: false,
+
+        shrinkToFit: true
+      });
+    }
+
+
+    /* Redraw if the phone/computer window changes size */
+
+    let resizeTimer;
+
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+
+      resizeTimer = setTimeout(() => {
+        renderCloud();
+      }, 250);
+    });
+
+
+    /* ==========================================================
+       START
+       ========================================================== */
+
+    if (!notConnected) {
+      loadWordCloudData();
+
+      setInterval(
+        loadWordCloudData,
+        REFRESH_EVERY_MS
+      );
+    }
+  </script>
+</body>
+</html>
