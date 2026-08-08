@@ -411,7 +411,7 @@
        This is the ONLY setting you need to change.
        ========================================================== */
 
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwXCiRHirOA722DPJwKp0fKyqQHd4hlKzsOkMeUnYn_BpTJAVypIfvtveGshar0cA_X/exec";
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbybj-jlVg2c0043mSkd-5p1vu0XuJ19S0VN9q5nooNQ7Q_kosB3PlODxgHaLn1U6oy1/exec";
 
 
     /* How often the word cloud checks the Google Sheet */
@@ -465,6 +465,17 @@
        SUBMIT RESPONSE
        ========================================================== */
 
+    function getExistingWordCount(response) {
+      const key = cleanInput(response).toLowerCase();
+
+      const match = latestWords.find(item =>
+        String(item.text || "").toLowerCase() === key
+      );
+
+      return match ? Number(match.count) || 0 : 0;
+    }
+
+
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
 
@@ -477,44 +488,65 @@
         return;
       }
 
+      const beforeCount = getExistingWordCount(response);
+
       button.disabled = true;
       button.textContent = "Submitting...";
+      setStatus("Sending response...");
 
       try {
-        /*
-          mode: "no-cors" is intentional.
-          Apps Script accepts the submission even though GitHub Pages
-          cannot directly inspect the POST response because it is cross-origin.
-        */
-
         const body = new URLSearchParams();
         body.append("response", response);
 
+        /*
+          Apps Script web apps are on a different origin from GitHub Pages,
+          so the POST itself is opaque to the browser. We therefore verify
+          success by re-reading the shared Sheet afterward and checking that
+          this exact response's count increased.
+        */
         await fetch(APPS_SCRIPT_URL, {
           method: "POST",
           mode: "no-cors",
           body
         });
 
+        await new Promise(resolve => setTimeout(resolve, 1200));
+
+        const data = await loadWordCloudData(true);
+
+        if (!data || !data.success) {
+          throw new Error("Could not verify the Apps Script response.");
+        }
+
+        const afterMatch = (data.words || []).find(item =>
+          String(item.text || "").toLowerCase() === response.toLowerCase()
+        );
+
+        const afterCount = afterMatch ? Number(afterMatch.count) || 0 : 0;
+
+        if (afterCount <= beforeCount) {
+          throw new Error(
+            "The response did not appear in the Google Sheet."
+          );
+        }
+
         input.value = "";
         charCount.textContent = "0";
 
         setStatus("Added! You can submit another.", "ok");
-
-        /*
-          Give the Sheet a moment to save, then refresh the cloud.
-        */
-        setTimeout(loadWordCloudData, 900);
-
         input.focus();
 
       } catch (error) {
         console.error(error);
 
         setStatus(
-          "Could not submit right now. Try again.",
+          "Could not save your response. The Google Apps Script connection may be blocked.",
           "bad"
         );
+
+        connectionWarning.style.display = "block";
+        connectionWarning.textContent =
+          "The Google Apps Script web app could not be reached publicly. Check its deployment access.";
 
       } finally {
         button.disabled = false;
@@ -527,59 +559,78 @@
        GET RESPONSES USING JSONP
        ========================================================== */
 
-    function loadWordCloudData() {
-      if (notConnected) return;
+    function loadWordCloudData(returnData = false) {
+      if (notConnected) {
+        return Promise.resolve(null);
+      }
 
-      const callbackName =
-        "__wordCloudCallback_" +
-        Date.now() +
-        "_" +
-        Math.floor(Math.random() * 100000);
+      return new Promise((resolve, reject) => {
+        const callbackName =
+          "__wordCloudCallback_" +
+          Date.now() +
+          "_" +
+          Math.floor(Math.random() * 100000);
 
-      const script = document.createElement("script");
+        const script = document.createElement("script");
 
-      const cleanup = () => {
-        try {
-          delete window[callbackName];
-        } catch (_) {}
+        const timeout = setTimeout(() => {
+          cleanup();
+          reject(new Error("Apps Script request timed out."));
+        }, 8000);
 
-        script.remove();
-      };
+        const cleanup = () => {
+          clearTimeout(timeout);
 
+          try {
+            delete window[callbackName];
+          } catch (_) {}
 
-      window[callbackName] = function(data) {
-        cleanup();
-
-        if (!data || !data.success) {
-          console.error("Invalid word cloud response:", data);
-          return;
-        }
-
-        totalEl.textContent = data.totalResponses || 0;
-        uniqueEl.textContent = data.uniqueResponses || 0;
-
-        latestWords = Array.isArray(data.words)
-          ? data.words
-          : [];
-
-        renderCloud();
-      };
+          script.remove();
+        };
 
 
-      script.onerror = function() {
-        cleanup();
-        console.error("Could not retrieve responses.");
-      };
+        window[callbackName] = function(data) {
+          cleanup();
+
+          if (!data || !data.success) {
+            reject(new Error("Invalid word cloud response."));
+            return;
+          }
+
+          totalEl.textContent = data.totalResponses || 0;
+          uniqueEl.textContent = data.uniqueResponses || 0;
+
+          latestWords = Array.isArray(data.words)
+            ? data.words
+            : [];
+
+          connectionWarning.style.display = "none";
+
+          renderCloud();
+          resolve(data);
+        };
 
 
-      script.src =
-        APPS_SCRIPT_URL +
-        "?callback=" +
-        encodeURIComponent(callbackName) +
-        "&_=" +
-        Date.now();
+        script.onerror = function() {
+          cleanup();
 
-      document.body.appendChild(script);
+          connectionWarning.style.display = "block";
+          connectionWarning.textContent =
+            "The Google Apps Script web app could not be reached publicly. Check its deployment access.";
+
+          reject(new Error("Could not retrieve responses."));
+        };
+
+
+        script.src =
+          APPS_SCRIPT_URL +
+          "?callback=" +
+          encodeURIComponent(callbackName) +
+          "&_=" +
+          Date.now();
+
+        document.body.appendChild(script);
+      });
     }
 
 
@@ -680,12 +731,15 @@
        ========================================================== */
 
     if (!notConnected) {
-      loadWordCloudData();
+      loadWordCloudData().catch(error => {
+        console.error(error);
+      });
 
-      setInterval(
-        loadWordCloudData,
-        REFRESH_EVERY_MS
-      );
+      setInterval(() => {
+        loadWordCloudData().catch(error => {
+          console.error(error);
+        });
+      }, REFRESH_EVERY_MS);
     }
   </script>
 </body>
